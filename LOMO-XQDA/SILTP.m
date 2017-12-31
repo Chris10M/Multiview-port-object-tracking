@@ -41,8 +41,8 @@ function J = SILTP(I, tau, R, numPoints, encoder)
 %  Email: scliao@nlpr.ia.ac.cn
 % 
 %  Reference:
-%     Shengcai Liao, Guoying Zhao, Vili Kellokumpu, Matti Pietik‰inen, and Stan Z. Li. 
-%      ìModeling Pixel Process with Scale Invariant Local Patterns for Background Subtraction in Complex Scenesî. 
+%     Shengcai Liao, Guoying Zhao, Vili Kellokumpu, Matti Pietik√§inen, and Stan Z. Li. 
+%      ‚ÄúModeling Pixel Process with Scale Invariant Local Patterns for Background Subtraction in Complex Scenes‚Äù. 
 %      In CVPR 2010, San Francisco, CA, USA, June 13-18, 2010.
 % 
 % ----------------------------------
