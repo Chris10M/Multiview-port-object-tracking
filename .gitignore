@@ -9,3 +9,4 @@ __pycache__/
 *.caffemodel
 *.prototxt
 .gitignore
+.DS_Store
