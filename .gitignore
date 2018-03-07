@@ -1,4 +1,4 @@
-.DS_Store
+src/.DS_Store
 .gitignore
 bin/
 pip-selfcheck.json
@@ -8,3 +8,4 @@ __pycache__/
 *.mp4
 *.caffemodel
 *.prototxt
+.gitignore
