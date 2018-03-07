@@ -1,9 +1,10 @@
-*.mp4
-lib/
+.DS_Store
+.gitignore
 bin/
 pip-selfcheck.json
 include/
-src/__pycache__/
+lib/
+__pycache__/
+*.mp4
 *.caffemodel
 *.prototxt
-
