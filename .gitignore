@@ -1,0 +1,9 @@
+*.mp4
+lib/
+bin/
+pip-selfcheck.json
+include/
+src/__pycache__/
+*.caffemodel
+*.prototxt
+
