@@ -1,21 +1,18 @@
 import cv2
-import pytesseract
-import numpy as np
-import cv2
 import multiprocessing as mp
-import time
 import queue
 
+from events import Event
 
-class Constants:
+class Constant:
     CAMERA = 0
     BUFFER_SIZE = 16
 
 
 class VideoDevice:
-    buffer_size = Constants.BUFFER_SIZE
+    buffer_size = Constant.BUFFER_SIZE
 
-    def __init__(self, device=Constants.CAMERA):
+    def __init__(self, device=Constant.CAMERA):
         self.frame_queue = mp.JoinableQueue(self.buffer_size)
         self.device = device
         self.frame_process = mp.Process(target=self._run, args=(self.device, ))
@@ -36,6 +33,30 @@ class VideoDevice:
             return None
 
         self.frame_queue.task_done()
+
+        return frame
+
+    def terminate(self):
+        self.frame_process.terminate()
+
+
+class Frame:
+    file_name = 'test1.mp4'
+
+    video = VideoDevice(device=file_name)
+    video.start()
+
+    @staticmethod
+    def get():
+        frame = Frame.video.get_frame()
+
+        if frame is None:
+            Event.frame_ready.clear()
+
+        while frame is None:
+            frame = Frame.video.get_frame()
+
+        Event.frame_ready.set()
 
         return frame
 

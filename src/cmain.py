@@ -42,36 +42,14 @@ with Main() as FrameLoop:
 
     picked_list = BoundHuman.get()
 
+    '''
+    class TrackerWorkers:
 
-    class TrackerPool:
-        tracker_list = list()
+        def __init__(self, picked_list):
+            self.roi_list = list()
+            self.picked_list = picked_list
 
-        @staticmethod
-        def get_by_id(_id):
-            for tracker in TrackerPool.tracker_list:
-                if tracker.get_id() == _id:
-                    return tracker
-            else:
-                return None
-
-
-        @staticmethod
-        def push(bounding_box_list):
-
-            for roi in bounding_box_list:
-                thread = Tracker(roi)
-                thread.daemon = True
-
-                thread.start()
-
-                TrackerPool.tracker_list.append(thread)
-
-        @staticmethod
-        def get():
-            return TrackerPool.tracker_list
-
-
-
+        def
 
         def __enter__(self):
             for roi in self.picked_list:
@@ -79,8 +57,8 @@ with Main() as FrameLoop:
                 thread.daemon = True
                 thread.start()
                 self.roi_list.append(thread)
-
-
+                
+    '''
 
     roi_list = list()
 
