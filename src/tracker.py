@@ -15,15 +15,16 @@ class Tracker(threading.Thread):
 
     def __init__(self, bounding_box):
         threading.Thread.__init__(self)
-        self.tracker = cv2.TrackerGOTURN_create()
+        self.tracker = cv2.TrackerMedianFlow_create()
         self.bounding_box_queue = queue.Queue()
-        ok = tracker.init(frame, bounding_box)
+        ok = self.tracker.init(Frame.get(), bounding_box)
+
 
     def run(self):
         track_time = time.time()
         while True:
             frame = Frame.get()
-            ok, bbox = tracker.update(frame)
+            ok, bbox = self.tracker.update(frame)
 
             if ok:
                 self.bounding_box_queue.put(bbox)
@@ -41,6 +42,17 @@ class Tracker(threading.Thread):
         self.bounding_box_queue.task_done()
 
         return bounding_box
+
+    def get_bounding_box_as_rect(self):
+        bounding_box = self.bounding_box_queue.get()
+        self.bounding_box_queue.task_done()
+
+        point_1 = (int(bounding_box[0]), int(bounding_box[1]))
+
+        point_2 = (int(bounding_box[0] + bounding_box[2]),
+                   int(bounding_box[1] + bounding_box[3]))
+
+        return point_1, point_2
 
 
 
