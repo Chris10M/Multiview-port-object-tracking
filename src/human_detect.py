@@ -16,20 +16,18 @@ class Constant:
 
 
 class BoundHuman:
-    bound_human_pipe_receive, bound_human_pipe_send = Pipe(duplex=False)
+    bound_human_queue = multiprocessing.JoinableQueue()
     frame_queue = multiprocessing.JoinableQueue()
 
     _get_list = None
 
     @staticmethod
-    def get(frame_queue, bound_human_pipe_send):
+    def get(frame_queue, bound_human_queue, sample_time, bound_human, refresh_time):
         """
          groupThreshold – Minimum possible number of rectangles minus 1. The threshold is used in a group of rectangles to retain it.
          eps – Relative difference between sides of the rectangles to merge them into a group.
 
         """
-        sample_time = Constant.SAMPLE_TIME_IN_SECONDS
-
         winStride = (4, 4)
         padding = (8, 8)
         scale = 1.05
@@ -74,11 +72,12 @@ class BoundHuman:
             return frame_rects_list
 
         while True:
+            bound_human.wait(refresh_time)
+
             start_time = time.time()
             pick_list = list()
             while True:
                 image = frame_queue.get()
-
                 (rects, weights) = hog. \
                                    detectMultiScale(image,
                                                     winStride=winStride,
@@ -100,8 +99,7 @@ class BoundHuman:
             picked_list =_sample_frame(pick_list,
                                        groupThreshold=groupThreshold,
                                        eps=eps)
-
-            bound_human_pipe_send.send(picked_list)
+            bound_human_queue.put(picked_list)
 
     @staticmethod
     def update():
@@ -109,20 +107,25 @@ class BoundHuman:
         while True:
             image = Frame.get()
             BoundHuman.frame_queue.put(image)
-
             try:
-                get_list_lock.acquire()
-                BoundHuman._get_list = BoundHuman.bound_human_pipe_receive.recv()
-                get_list_lock.release()
+                with get_list_lock:
+                    BoundHuman._get_list = BoundHuman.bound_human_queue.get_nowait()
+
             except:
                 pass
+
+            if Event.bound_human.isSet():
+                BoundHuman.get_process.terminate()
+
+    get_process = Process(target=get.__func__, args=(frame_queue, bound_human_queue, Constant.SAMPLE_TIME_IN_SECONDS,
+                                                     Event.bound_human, Constant.REFRESH_TIME_IN_SECONDS))
+    get_process.start()
 
     update_thread = threading.Thread(target=update.__func__)
     update_thread.daemon = True
     update_thread.start()
 
-    get_process = Process(target=get.__func__, args=(frame_queue, bound_human_pipe_send))
-    get_process.start()
+
 
     @staticmethod
     def get_list():

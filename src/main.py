@@ -40,9 +40,8 @@ with Main() as FrameLoop:
             break
     cv2.destroyAllWindows()
 
-
-    #picked_list = BoundHuman.get_list()
-
+    picked_list = BoundHuman.get_list()
+    print(len(picked_list))
     TrackerPool.push(picked_list)
 
     while True:
@@ -63,14 +62,13 @@ with Main() as FrameLoop:
                             (0, 0, 255),
                             2)
 
-        for tracker in TrackerPool.get_dead():
-            tracker.get_buffer()
-            tracker.reclaim(picked_list[0])
+        #for tracker in TrackerPool.get_dead():
+        #    tracker.get_buffer()
+        #    tracker.reclaim(picked_list[0])
 
-        picked_list = BoundHuman.get(sample_time=0.2,
-                                     groupThreshold=0)
+        #picked_list = BoundHuman.get_list()
 
-        l = subtract_bounding_box(picked_list, tracked_list, threshold=10000)
+        #l = subtract_bounding_box(picked_list, tracked_list, threshold=10000)
 
         cv2.imshow("No S", image)
         if cv2.waitKey(1) & 0xFF == ord('q'):
