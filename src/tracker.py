@@ -53,25 +53,26 @@ class Tracker(threading.Thread):
 
     POISON_PILL = (0, 0, 0, 0)
 
-    def __init__(self, bounding_box, _id=None):
+    def reclaim(self, bounding_box):
+        _ = self.tracker.init(Frame.get(), tuple(bounding_box))
+        self.track_failure.clear()
+
+    def __init__(self, bounding_box):
         threading.Thread.__init__(self)
         self.tracker = cv2.TrackerKCF_create()
-        self.bounding_box_queue = queue.Queue()
         _ = self.tracker.init(Frame.get(), tuple(bounding_box))
+
+        self.track_failure = threading.Event()
+        self.track_failure.clear()
         self.id_lock = threading.Lock()
 
         self.buffer_queue = Buffer()
+        self.bounding_box_queue = queue.Queue()
 
-        self.track_failure = threading.Event()
-
-        if _id is not None:
+        with Tracker.g_id_lock:
             with self.id_lock:
-                self.id = _id
-        else:
-            with Tracker.g_id_lock:
-                with self.id_lock:
-                    self.id = Tracker.g_id
-                Tracker.g_id += 1
+                self.id = Tracker.g_id
+            Tracker.g_id += 1
 
     def run(self):
         track_time = time.time()
@@ -95,6 +96,8 @@ class Tracker(threading.Thread):
             if self.track_failure.is_set():
                 if time.time() - track_time > Tracker.time_out_seconds:
                     break
+                elif ok:
+                    self.track_failure.clear()
 
     def get_bounding_box(self, dtype=float):
         if self.track_failure.is_set():
@@ -117,3 +120,41 @@ class Tracker(threading.Thread):
 
     def get_buffer(self):
         return self.buffer_queue.get_all()
+
+
+class TrackerPool:
+    tracker_list = list()
+
+    @staticmethod
+    def get_by_id(_id):
+        for tracker in TrackerPool.tracker_list:
+            if tracker.get_id() == _id:
+                return tracker
+        else:
+            return None
+
+
+    @staticmethod
+    def push(bounding_box_list):
+
+        for roi in bounding_box_list:
+            thread = Tracker(roi)
+            thread.daemon = True
+
+            thread.start()
+
+            TrackerPool.tracker_list.append(thread)
+
+    @staticmethod
+    def get():
+        return TrackerPool.tracker_list
+
+    @staticmethod
+    def get_dead():
+        tracker_list = list()
+        for tracker in TrackerPool.tracker_list:
+            if not tracker.is_alive():
+                tracker_list.append(tracker)
+
+        return tracker_list
+

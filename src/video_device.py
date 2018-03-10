@@ -61,24 +61,3 @@ class Frame:
         return frame
 
 
-if __name__ == '__main__':
-    file_name = 'test2.mp4'
-    video = VideoDevice(device=file_name)
-    video.start()
-
-    while (True):
-
-        frame = video.get_frame()
-
-        if frame is None:
-            continue
-
-        cv2.imshow('frame', frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    # When everything done, release the capture
-    cv2.destroyAllWindows()
-
-
-
