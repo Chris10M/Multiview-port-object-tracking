@@ -9,8 +9,8 @@ from video_device import Frame
 from tracker import Tracker, TrackFailure, TrackerPool
 from events import Event
 from utils import subtract_bounding_box
-from human_detect import BoundHuman
-
+#from human_detect import BoundHuman
+from boundhumantest import BoundHuman
 class Main:
     def __enter__(self):
         pass
@@ -40,8 +40,8 @@ with Main() as FrameLoop:
             break
     cv2.destroyAllWindows()
 
-    picked_list = BoundHuman.get_list()
-    print(len(picked_list))
+    picked_list = BoundHuman.get_dict()
+    print((picked_list))
     TrackerPool.push(picked_list)
 
     while True:
