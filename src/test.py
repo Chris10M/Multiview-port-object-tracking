@@ -10,6 +10,19 @@ import threading
 import time
 import collections
 import queue
+import hashlib
 
 if __name__ == '__main__':
+    from paramiko import SSHClient
+    from scp import SCPClient
 
+    ssh = SSHClient()
+    ssh.load_system_host_keys()
+    ssh.connect('192.168.0.100')
+
+    # SCPCLient takes a paramiko transport as an argument
+    scp = SCPClient(ssh.get_transport())
+
+    scp.put('test.txt',remote_path='/home/kristen/Desktop/')
+
+    scp.close()

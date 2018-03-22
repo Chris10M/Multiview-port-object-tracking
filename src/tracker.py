@@ -6,6 +6,16 @@ import time
 from events import Event
 from video_device import VideoDevice, Frame
 
+from uuid import getnode as get_mac
+import time
+import hashlib
+
+def get_uuid(bounding_box):
+    generated_id = get_mac() + time.time() + sum(bounding_box)
+    uuid = hashlib.sha256(str(generated_id).encode('utf-8')).hexdigest()
+
+    return uuid
+
 
 class TrackFailure(Exception):
     pass
@@ -13,7 +23,7 @@ class TrackFailure(Exception):
 
 class Constant:
     TRACKING_FAILURE_DETECTED = -1
-    TIME_OUT_SECOND_FOR_TRACK = 1
+    TIME_OUT_SECOND_FOR_TRACK = 0
     QUEUE_BUFFER_SIZE = 50
 
 
@@ -48,8 +58,6 @@ class Buffer:
 
 class Tracker(threading.Thread):
     time_out_seconds = Constant.TIME_OUT_SECOND_FOR_TRACK
-    g_id = 0
-    g_id_lock = threading.Lock()
 
     POISON_PILL = (0, 0, 0, 0)
 
@@ -69,10 +77,8 @@ class Tracker(threading.Thread):
         self.buffer_queue = Buffer()
         self.bounding_box_queue = queue.Queue()
 
-        with Tracker.g_id_lock:
-            with self.id_lock:
-                self.id = Tracker.g_id
-            Tracker.g_id += 1
+        with self.id_lock:
+                self.id = get_uuid(bounding_box=bounding_box)
 
     def run(self):
         track_time = time.time()
@@ -89,15 +95,12 @@ class Tracker(threading.Thread):
                                             int(bbox[2])])
 
                 track_time = time.time()
+                self.track_failure.clear()
             else:
-                self.track_failure.set()
                 self.bounding_box_queue.put(Tracker.POISON_PILL)
-
-            if self.track_failure.is_set():
                 if time.time() - track_time > Tracker.time_out_seconds:
+                    self.track_failure.set()
                     break
-                elif ok:
-                    self.track_failure.clear()
 
     def get_bounding_box(self, dtype=float):
         if self.track_failure.is_set():
@@ -135,15 +138,13 @@ class TrackerPool:
 
 
     @staticmethod
-    def push(bounding_box_list):
+    def push(bounding_box):
+        thread = Tracker(bounding_box)
+        thread.daemon = True
 
-        for roi in bounding_box_list:
-            thread = Tracker(roi)
-            thread.daemon = True
+        thread.start()
 
-            thread.start()
-
-            TrackerPool.tracker_list.append(thread)
+        TrackerPool.tracker_list.append(thread)
 
     @staticmethod
     def get():
@@ -158,3 +159,15 @@ class TrackerPool:
 
         return tracker_list
 
+    @staticmethod
+    def get_alive():
+        tracker_list = list()
+        for tracker in TrackerPool.tracker_list:
+            if tracker.is_alive():
+                tracker_list.append(tracker)
+
+        return tracker_list
+
+    @staticmethod
+    def get_live_count():
+        return len(TrackerPool.get_alive())
