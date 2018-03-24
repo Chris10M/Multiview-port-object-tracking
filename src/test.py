@@ -12,7 +12,11 @@ import collections
 import queue
 import hashlib
 
+import stack
+from stack import Stack
+
 if __name__ == '__main__':
+    '''
     from paramiko import SSHClient
     from scp import SCPClient
 
@@ -26,3 +30,16 @@ if __name__ == '__main__':
     scp.put('test.txt',remote_path='/home/kristen/Desktop/')
 
     scp.close()
+    '''
+
+    temp_stack = Stack(4)
+
+    for i in range(1, 6):
+        temp_stack.push(i)
+
+
+    while True:
+        try:
+            print(temp_stack.pop())
+        except stack.Empty:
+            break

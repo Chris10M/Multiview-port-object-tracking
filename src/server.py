@@ -1,5 +1,6 @@
 import pickle
 import pickletools
+from stack import Stack
 
 class Payload:
 
@@ -122,15 +123,14 @@ class FileUpdateNotifier:
 
 
 def get_new_files():
-        file_list = list()
-        hostname_list = list()
+        hostname_filename_dict = collections.defaultdict(list)
 
         for hostname, timestamp_list in FileUpdateNotifier.get_new_files().items():
-            for timestamp in timestamp_list:
-                file_list.append('{0}_{1}.pickle'.format(hostname, timestamp))
-                hostname_list.append(hostname)
 
-        return hostname_list, file_list
+            for timestamp in timestamp_list:
+                hostname_filename_dict[hostname].append('{0}_{1}.pickle'.format(hostname, timestamp))
+
+        return hostname_filename_dict
 
 
 class TrackFrameDatabase:
@@ -144,19 +144,84 @@ class TrackFrameDatabase:
     view_port_frame_dict = dict()
     view_port_frame_dict_lock = threading.Lock()
 
-    def __update_track_frame(self):
+    recently_used_host = Stack()
+    recently_used_track_id = Stack()
+    recently_used_lock = threading.Lock()
+
+    new_file_count_lock = threading.Lock()
+    new_file_count = 0
+
+    __update_track_frame_thread = None
+    __update_track_frame_terminate_event = threading.Event()
+
+    @staticmethod
+    def __update_track_frame():
 
         while True:
-            new_file_list = get_new_files()
+            if TrackFrameDatabase.__update_track_frame_terminate_event.is_set():
+                break
 
-            for hostname, file in new_file_list:
-                payload = get_payload_from_file(file)
+            hostname_filename_dict = get_new_files()
 
+            with TrackFrameDatabase.new_file_count_lock:
+                TrackFrameDatabase.new_file_count += len(hostname_filename_dict.values())
+
+            for hostname, filename_list in hostname_filename_dict.items():
+                for file_name in filename_list:
+                    payload = get_payload_from_file(file_name)
+
+                    with TrackFrameDatabase.track_frame_dict_lock:
+                        TrackFrameDatabase.track_frame_dict[payload.get_track_id()].append(payload.get_track_buffer())
+
+                    with TrackFrameDatabase.view_port_frame_dict_lock:
+                        TrackFrameDatabase.view_port_frame_dict[hostname] = payload.get_view_port_buffer()
+
+                    with TrackFrameDatabase.recently_used_lock:
+                        TrackFrameDatabase.recently_used_track_id.push(payload.get_track_id)
+
+                with TrackFrameDatabase.recently_used_lock:
+                    TrackFrameDatabase.recently_used_host.push(hostname)
+
+
+
+    def track_id_iterator(self):
+        with TrackFrameDatabase.recently_used_lock:
+            for track_id in TrackFrameDatabase.recently_used_track_id.yield_generator():
                 with TrackFrameDatabase.track_frame_dict_lock:
-                    TrackFrameDatabase.track_frame_dict[payload.get_track_id()].append(payload.get_track_buffer())
+                    yield TrackFrameDatabase.track_frame_dict[track_id]
 
+    def get_latest_host_update(self):
+
+        while TrackFrameDatabase.new_file_count > 0:
+
+            with TrackFrameDatabase.recently_used_lock:
                 with TrackFrameDatabase.view_port_frame_dict_lock:
-                    TrackFrameDatabase.view_port_frame_dict[hostname] = payload.get_view_port_buffer()
+                    yield TrackFrameDatabase.view_port_frame_dict[TrackFrameDatabase.recently_used_host.pop()]
+
+            with TrackFrameDatabase.new_file_count_lock:
+                TrackFrameDatabase.new_file_count -= 1
+
+    @staticmethod
+    def start():
+        TrackFrameDatabase.__update_track_frame_terminate_event.clear()
+
+        TrackFrameDatabase.__update_track_frame_thread = threading.Thread(target=TrackFrameDatabase.__update_track_frame)
+        TrackFrameDatabase.__update_track_frame_thread.start()
+
+    @staticmethod
+    def terminate():
+        TrackFrameDatabase.__update_track_frame_terminate_event.set()
+
+
+
+class PeridProcessPool:
+    size = 5
+
+    @staticmethod
+    def start():
+
+
+
 
 
 

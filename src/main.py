@@ -51,6 +51,8 @@ with Main() as FrameLoop:
 
     view_port_buffer = Buffer()
 
+    track_failure_frame_counter = 0
+
     while True:
         image = Frame.get()
 
@@ -59,14 +61,16 @@ with Main() as FrameLoop:
         # A new person enters into the frame
         if TrackerPool.get_live_count() < len(detected_human_box_list):
             is_new_object_present = True
+            #view_port_buffer.put((image, TrackerPool.get_roi_for_alive()))
         else:
             is_new_object_present = False
+            new_object_frame_presence = 0
+            #view_port_buffer.clear()
 
         if is_new_object_present is True:
             new_object_frame_presence += 1
 
-        if new_object_frame_presence > Threshold.new_object_frame_presence:
-            client.send_payload(view_port_buffer, tracker)
+
             '''
             upload human_box_list and view_port_buffer
             create a new tracker
@@ -78,13 +82,38 @@ with Main() as FrameLoop:
                 cv2.rectangle(image, (xa, ya), (xb, yb), (0, 0, 255), 2)
                 track_failure_frame_counter = 0
             except TrackFailure:
-                view_port_buffer.put(image)
-                if track_failure_frame_counter > Threshold.track_failure_buffer_size:
-                    client.send_payload(view_port_buffer, tracker)
+                #view_port_buffer.put((image, TrackerPool.get_roi_for_alive()))
+
 
                 track_failure_frame_counter += 1
 
                 exit()
+
+        def pre_process_payload(image, view_port_buffer, track_failure_frame_counter, new_object_frame_presence):
+            new_roi = False
+            track_failure  = False
+
+            if track_failure_frame_counter > Threshold.track_failure_buffer_size:
+                track_failure = True
+
+            if new_object_frame_presence > Threshold.new_object_frame_presence:
+                new_roi = True
+
+            if track_failure_frame_counter or new_object_frame_presence:
+                view_port_buffer.put((image, TrackerPool.get_roi_for_alive()))
+
+            if not track_failure_frame_counter and not new_object_frame_presence:
+                view_port_buffer.clear()
+
+            if track_failure or new_roi:
+                send_payload = True
+
+            else :
+                send_payload = False
+
+            if send_payload:
+                client.send_payload(view_port_buffer, tracker)
+
 
                 '''
                 human_box_list and upload viewport_buffer and tracker details 

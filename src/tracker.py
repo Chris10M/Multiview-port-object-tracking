@@ -33,11 +33,14 @@ class Buffer:
 
     def __init__(self):
         self.buffer_queue = queue.Queue(Buffer.buffer_size)
-
+        self.current_size = 0
+        self.current_size_lock = threading.Lock()
     def put(self, item):
         try:
             self.buffer_queue.put_nowait(item)
 
+            with self.current_size_lock:
+                self.current_size += 1
         except queue.Full:
             self.buffer_queue.get_nowait()
             self.buffer_queue.task_done()
@@ -47,6 +50,9 @@ class Buffer:
     def get_all(self):
         items = list()
 
+        with self.current_size_lock:
+            self.current_size = 0
+
         while True:
             try:
                 item = self.buffer_queue.get_nowait()
@@ -55,6 +61,14 @@ class Buffer:
             except queue.Empty:
                 return items
 
+    def clear(self):
+
+        with self.current_size_lock:
+            if not self.current_size:
+                return
+
+        del self.buffer_queue
+        self.buffer_queue = queue.Queue(Buffer.buffer_size)
 
 class Tracker(threading.Thread):
     time_out_seconds = Constant.TIME_OUT_SECOND_FOR_TRACK
@@ -171,3 +185,17 @@ class TrackerPool:
     @staticmethod
     def get_live_count():
         return len(TrackerPool.get_alive())
+
+    @staticmethod
+    def get_roi_for_alive():
+        alive_tracker_list = TrackerPool.get_alive()
+
+        alive_roi_list = list()
+
+        for tracker in alive_tracker_list:
+            xa, ya, xb, yb = tracker.get_bounding_box(dtype=int)
+
+            alive_roi_list.append([tracker.get_id(), (xa, ya, xb, yb)])
+
+
+        return alive_roi_list
