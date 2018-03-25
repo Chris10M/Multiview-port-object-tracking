@@ -23,8 +23,12 @@ class TrackFailure(Exception):
 
 class Constant:
     TRACKING_FAILURE_DETECTED = -1
-    TIME_OUT_SECOND_FOR_TRACK = 0
+    TIME_OUT_SECOND_FOR_TRACK = 2
     QUEUE_BUFFER_SIZE = 50
+
+    TRACKER_IMAGE_WIDTH = 60
+    TRACKER_IMAGE_HEIGHT = 160
+
 
 
 
@@ -81,7 +85,7 @@ class Tracker(threading.Thread):
 
     def __init__(self, bounding_box):
         threading.Thread.__init__(self)
-        self.tracker = cv2.TrackerKCF_create()
+        self.tracker = cv2.TrackerMedianFlow_create()
         _ = self.tracker.init(Frame.get(), tuple(bounding_box))
 
         self.track_failure = threading.Event()
@@ -103,10 +107,15 @@ class Tracker(threading.Thread):
             if ok:
                 self.bounding_box_queue.put(bbox)
 
-                self.buffer_queue.put(frame[int(bbox[1]):\
-                                            int(bbox[3]),\
-                                            int(bbox[0]):\
-                                            int(bbox[2])])
+                tracker_frame = frame[int(bbox[1]):\
+                                      int(bbox[3]),\
+                                      int(bbox[0]):\
+                                      int(bbox[2])]
+
+                tracker_frame = cv2.resize(tracker_frame, (Constant.TRACKER_IMAGE_WIDTH, Constant.TRACKER_IMAGE_HEIGHT))
+                tracker_frame = cv2.cvtColor(tracker_frame, cv2.COLOR_BGR2RGB)
+
+                self.buffer_queue.put(tracker_frame)
 
                 track_time = time.time()
                 self.track_failure.clear()

@@ -9,22 +9,24 @@ from uuid import getnode as get_mac
 import datetime
 
 class Server:
-    address = '192.168.0.100'
-    pickle_directory = os.path.join('/', 'home', 'kristen', 'Desktop')
+    address = '10.0.0.7'
+    pickle_directory = os.path.join('/', 'home', 'kristen', 'Desktop', 'server_pickle')
     pickle_name = '{0}_{1}.pickle'.format(hex(get_mac()), datetime.datetime.now())
 
 
 class Payload:
 
-    def __init__(self, view_port_buffer, tracker = None):
+    def __init__(self, view_port_buffer, tracker_list):
         self.view_port_buffer = view_port_buffer.get_all()
-        self.is_tracker_present = True if tracker is not None else False
-        self.track_buffer = None
-        self.track_id = None
+        self.is_tracker_present = True if tracker_list is not None else False
+        self.track_buffer = list()
 
         if self.is_tracker_present:
-            self.track_id = tracker.get_id()
-            self.track_buffer = tracker.buffer_queue.get_all()
+            for tracker in tracker_list:
+                tracker_buffer = tracker.buffer_queue.get_all()
+
+                if tracker_buffer:
+                    self.track_buffer.append((tracker.get_id(), tracker_buffer))
 
     def serialize(self):
         return pickletools.optimize(pickle.dumps(self))
@@ -32,7 +34,7 @@ class Payload:
 
 def send_payload(view_port_buffer, tracker):
     paylod_pickle = Payload(view_port_buffer, tracker).serialize()
-
+    
     ssh = SSHClient()
     ssh.load_system_host_keys()
     ssh.connect(Server.address)
@@ -50,7 +52,17 @@ def send_payload(view_port_buffer, tracker):
     scp.close()
     # close file handler
     fl.close()
+    '''
+    t = pickle.loads(paylod_pickle)
+    import cv2
+    for image, roi_list, tracker_live_roi in (t.view_port_buffer):
+        cv2.imshow('detected', image)
 
+        cv2.waitKey(0)
+
+    cv2.destroyAllWindows()
+    '''
+    exit()
 
 '''
 def main:

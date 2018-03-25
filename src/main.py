@@ -21,6 +21,37 @@ class Main:
         Event.bound_human_terminate.is_set()
         Frame.video.terminate()
 
+def pre_process_payload(image, detected_human_box_list, view_port_buffer, track_failure_frame_counter, new_object_frame_presence):
+    new_roi = False
+    track_failure  = False
+    send_dead_tracker = False
+    if track_failure_frame_counter > Threshold.track_failure_buffer_size:
+        track_failure = True
+
+    if new_object_frame_presence > Threshold.new_object_frame_presence:
+        new_roi = True
+
+    if track_failure_frame_counter or new_object_frame_presence:
+        view_port_buffer.put((image, detected_human_box_list, TrackerPool.get_roi_for_alive()))
+
+    if not track_failure_frame_counter and not new_object_frame_presence:
+        view_port_buffer.clear()
+
+    if track_failure or new_roi:
+        send_payload = True
+        if track_failure:
+            send_dead_tracker = True
+        else:
+            send_dead_tracker = False
+    else :
+        send_payload = False
+
+    if send_payload:
+        if send_dead_tracker:
+            #client.send_payload(view_port_buffer, TrackerPool.get_dead())
+            pass
+        else:
+            client.send_payload(view_port_buffer, None)
 
 
 class Benchmark:
@@ -41,10 +72,10 @@ with Main() as FrameLoop:
     time.sleep(5)
     print('initialization finished')
 
-    initial_track = human_detect.get_box_list()
+    #initial_track = human_detect.get_box_list()
 
-    for bounding_box in initial_track:
-        TrackerPool.push(bounding_box)
+    #for bounding_box in initial_track:
+     #   TrackerPool.push(bounding_box)
 
     is_new_object_present = False
     new_object_frame_presence = 0
@@ -83,41 +114,13 @@ with Main() as FrameLoop:
                 track_failure_frame_counter = 0
             except TrackFailure:
                 #view_port_buffer.put((image, TrackerPool.get_roi_for_alive()))
-
-
                 track_failure_frame_counter += 1
 
-                exit()
-
-        def pre_process_payload(image, view_port_buffer, track_failure_frame_counter, new_object_frame_presence):
-            new_roi = False
-            track_failure  = False
-
-            if track_failure_frame_counter > Threshold.track_failure_buffer_size:
-                track_failure = True
-
-            if new_object_frame_presence > Threshold.new_object_frame_presence:
-                new_roi = True
-
-            if track_failure_frame_counter or new_object_frame_presence:
-                view_port_buffer.put((image, TrackerPool.get_roi_for_alive()))
-
-            if not track_failure_frame_counter and not new_object_frame_presence:
-                view_port_buffer.clear()
-
-            if track_failure or new_roi:
-                send_payload = True
-
-            else :
-                send_payload = False
-
-            if send_payload:
-                client.send_payload(view_port_buffer, tracker)
-
-
-                '''
-                human_box_list and upload viewport_buffer and tracker details 
-                '''
+        pre_process_payload(image=image,
+                            detected_human_box_list=detected_human_box_list,
+                            view_port_buffer=view_port_buffer,
+                            track_failure_frame_counter=track_failure_frame_counter,
+                            new_object_frame_presence=new_object_frame_presence)
 
             #print("lost track at {0}".format(tracker.id))
 

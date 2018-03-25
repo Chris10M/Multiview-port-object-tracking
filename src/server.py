@@ -10,7 +10,6 @@ class Payload:
         self.view_port_buffer = payload.view_port_buffer
         self.is_tracker_present = payload.is_tracker_present
         self.track_buffer = payload.track_buffer
-        self.track_id = payload.track_id
 
     def get_view_port_buffer(self):
         return self.view_port_buffer
@@ -18,8 +17,7 @@ class Payload:
     def get_track_buffer(self):
         return self.track_buffer
 
-    def get_track_id(self):
-        return self.track_id
+
 
 
 import os
@@ -48,7 +46,7 @@ class FileUpdateNotifier:
                 break
 
             file_list = list()
-            for (_, _, file_name) in os.walk(os.path.join('.', 'stest')):
+            for (_, _, file_name) in os.walk(os.path.join('.', 'server_pickle')):
                 file_list.extend(file_name)
                 break
 
@@ -71,7 +69,7 @@ class FileUpdateNotifier:
     def __get_update():
         file_list = list()
 
-        for (_, _, file_name) in os.walk(os.path.join('.', 'stest')):
+        for (_, _, file_name) in os.walk(os.path.join('.', 'server_pickle')):
             file_list.extend(file_name)
             break
         for file_name in file_list:
@@ -132,16 +130,19 @@ def get_new_files():
 
         return hostname_filename_dict
 
+import multiprocessing
+
+shared_memory = multiprocessing.Manager()
 
 class TrackFrameDatabase:
     '''
     dict(hash_id) = [Frames]
     '''
+    #track_frame_dict = collections.defaultdict(list)
+    track_frame_dict = shared_memory.dict()
+    track_frame_dict_lock = shared_memory.Lock()
 
-    track_frame_dict = collections.defaultdictdict(list)
-    track_frame_dict_lock = threading.Lock()
-
-    view_port_frame_dict = dict()
+    view_port_frame_dict = shared_memory.dict()
     view_port_frame_dict_lock = threading.Lock()
 
     recently_used_host = Stack()
@@ -154,6 +155,8 @@ class TrackFrameDatabase:
     __update_track_frame_thread = None
     __update_track_frame_terminate_event = threading.Event()
 
+    file_updated_event = threading.Event()
+
     @staticmethod
     def __update_track_frame():
 
@@ -163,24 +166,35 @@ class TrackFrameDatabase:
 
             hostname_filename_dict = get_new_files()
 
+            if not hostname_filename_dict:
+                continue
+
             with TrackFrameDatabase.new_file_count_lock:
                 TrackFrameDatabase.new_file_count += len(hostname_filename_dict.values())
 
             for hostname, filename_list in hostname_filename_dict.items():
                 for file_name in filename_list:
-                    payload = get_payload_from_file(file_name)
+
+                    with open(os.path.join('.', 'server_pickle', file_name), 'rb') as pickle_file:
+                        payload = Payload(pickle_file)
 
                     with TrackFrameDatabase.track_frame_dict_lock:
-                        TrackFrameDatabase.track_frame_dict[payload.get_track_id()].append(payload.get_track_buffer())
+                        for track_id, tracker_buffer in payload.get_track_buffer():
+                            try:
+                                TrackFrameDatabase.track_frame_dict[payload.track_id].extend(tracker_buffer)
+                            except:
+                                TrackFrameDatabase.track_frame_dict[payload.track_id] = tracker_buffer
+
+                            with TrackFrameDatabase.recently_used_lock:
+                                TrackFrameDatabase.recently_used_track_id.push(track_id)
 
                     with TrackFrameDatabase.view_port_frame_dict_lock:
                         TrackFrameDatabase.view_port_frame_dict[hostname] = payload.get_view_port_buffer()
 
-                    with TrackFrameDatabase.recently_used_lock:
-                        TrackFrameDatabase.recently_used_track_id.push(payload.get_track_id)
-
                 with TrackFrameDatabase.recently_used_lock:
                     TrackFrameDatabase.recently_used_host.push(hostname)
+
+            TrackFrameDatabase.file_updated_event.set()
 
 
 
@@ -190,16 +204,24 @@ class TrackFrameDatabase:
                 with TrackFrameDatabase.track_frame_dict_lock:
                     yield TrackFrameDatabase.track_frame_dict[track_id]
 
-    def get_latest_host_update(self):
+    @staticmethod
+    def get_latest_host_update():
+
+        TrackFrameDatabase.file_updated_event.wait()
 
         while TrackFrameDatabase.new_file_count > 0:
 
             with TrackFrameDatabase.recently_used_lock:
                 with TrackFrameDatabase.view_port_frame_dict_lock:
-                    yield TrackFrameDatabase.view_port_frame_dict[TrackFrameDatabase.recently_used_host.pop()]
+                    with TrackFrameDatabase.new_file_count_lock:
+                        TrackFrameDatabase.new_file_count -= 1
 
-            with TrackFrameDatabase.new_file_count_lock:
-                TrackFrameDatabase.new_file_count -= 1
+                    hostname = TrackFrameDatabase.recently_used_host.pop()
+                    return hostname, TrackFrameDatabase.view_port_frame_dict[hostname]
+
+
+
+        TrackFrameDatabase.file_updated_event.clear()
 
     @staticmethod
     def start():
@@ -214,30 +236,67 @@ class TrackFrameDatabase:
 
 
 
+
+
+#def process(viewport_buffer, track_buffer, data_sent_event):
+
+#import time
+FileUpdateNotifier.start()
+TrackFrameDatabase.start()
+
+import person_reidentification.run as perid
+
+    #l = manager.list(range(10))
+class Perid:
+    def __init__(self):
+        self.detected_roi = multiprocessing.Queue()
+        self.viewport_buffer = multiprocessing.Queue()
+        self.process = multiprocessing.Process(target=perid.process, args=(self.viewport_buffer,
+                                                                           TrackFrameDatabase.track_frame_dict,
+                                                                           TrackFrameDatabase.track_frame_dict_lock,
+                                                                           self.detected_roi))
+        self.process.start()
+
+    def detect(self, viewport_buffer):
+        self.viewport_buffer.put(viewport_buffer)
+        return self.detected_roi.get()
+
+
 class PeridProcessPool:
-    size = 5
+    size = 2
+    process_dict = dict()
+    hostname = ('RPI 1', 'RPI 2')
 
     @staticmethod
     def start():
+        for i in range(PeridProcessPool.size):
+            PeridProcessPool.process_dict[PeridProcessPool.hostname[i]] = Perid()
+
+    @staticmethod
+    def detect():
+        host_roi_dict = dict()
+        hostname, host_viewport_buffer = TrackFrameDatabase.get_latest_host_update()
+        print(hostname)
+        host_roi_dict[hostname] = PeridProcessPool.process_dict['RPI 1'].detect(host_viewport_buffer)
+
+        return host_roi_dict
+
+PeridProcessPool.start()
+print(PeridProcessPool.detect())
+
+    #p.join()
+
+#for i in TrackFrameDatabase.get_latest_host_update():
+
+    #print(i)
+    #break
+
+FileUpdateNotifier.terminate()
+TrackFrameDatabase.terminate()
 
 
-
-
-
-
-exit()
-import time
-FileUpdateNotifier.start()
+'''
 while True:
-    pass
-    def get_new_files():
-        file_list = list()
-        for hostname, timestamp_list in FileUpdateNotifier.get_new_files().items():
-            for timestamp in timestamp_list:
-                file_list.append('{0}_{1}.pickle'.format(hostname, timestamp))
-
-        return file_list
-
     l = get_new_files()
     if l:
         print(l)
@@ -269,3 +328,5 @@ with open('test.pickle', 'rb') as s:
 
 
     cv2.destroyAllWindows()
+
+'''

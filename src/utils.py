@@ -28,11 +28,11 @@ def subtract_bounding_box(bounding_box_list_1, bounding_box_list_2, threshold):
 
     print(value_1)
 
-    unique_bounding_box = list()
+    unique_bounding_box_list = list()
     for key, value in value_1.items():
         if value < threshold:
-            unique_bounding_box.append(bounding_box_list_1[key])
+            unique_bounding_box_list.append(bounding_box_list_1[key])
 
-    return unique_bounding_box
+    return unique_bounding_box_list
 
 
