@@ -69,13 +69,13 @@ class Threshold:
 with Main() as FrameLoop:
 
     print('Wait to initialize engine')
-    time.sleep(5)
+    #time.sleep(5)
     print('initialization finished')
 
     #initial_track = human_detect.get_box_list()
 
     #for bounding_box in initial_track:
-     #   TrackerPool.push(bounding_box)
+    #    TrackerPool.push(bounding_box)
 
     is_new_object_present = False
     new_object_frame_presence = 0
@@ -88,6 +88,16 @@ with Main() as FrameLoop:
         image = Frame.get()
 
         detected_human_box_list = human_detect.get_box_list()
+        
+        for box in detected_human_box_list:
+            xa, ya, xb, yb = box
+            cv2.rectangle(image, (xa, ya), (xb, yb), (0, 0, 255), 2)
+
+        cv2.imshow("tracker", image)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        continue
 
         # A new person enters into the frame
         if TrackerPool.get_live_count() < len(detected_human_box_list):
