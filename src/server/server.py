@@ -6,6 +6,7 @@ from stack import Stack
 
 class ServerFileSystem:
     payload_path = os.path.join('.', 'payload')
+    client_list = os.path.join('.', 'client_list.json')
 
 class Payload:
     def __init__(self, payload_file):
@@ -247,10 +248,37 @@ class TrackFrameDatabase:
 FileUpdateNotifier.start()
 TrackFrameDatabase.start()
 
-#import person_reidentification.run as perid
+import person_reidentification.run as perid
+import json
+
+class Client:
+    client_list = list()
+
+    def __init__(self, client):
+        self.hostname = client['hostname']
+        self.address = client['address']
+
+        Client.client_list.append(self)
+
+    def get(self):
+        return self.hostname, self.address
+
+    @staticmethod
+    def get_list():
+        return Client.client_list
+
+def populate_client():
+    with open(ServerFileSystem.client_list, 'r') as client_list_file:
+        client_list_json = json.load(client_list_file)
+
+        for client in client_list_json:
+            Client(client)
+
+
+
 
 #l = manager.list(range(10))
-'''
+
 class Perid:
     def __init__(self):
         self.detected_roi = multiprocessing.Queue()
@@ -267,26 +295,65 @@ class Perid:
 
 
 class PeridProcessPool:
-    size = 2
+    populate_client()
+    client_list = dict([ x.get() for x in Client.get_list()])
     process_dict = dict()
-    hostname = ('RPI 1', 'RPI 2')
 
     @staticmethod
     def start():
-        for i in range(PeridProcessPool.size):
-            PeridProcessPool.process_dict[PeridProcessPool.hostname[i]] = Perid()
+        for hostname, address in PeridProcessPool.client_list.items():
+            PeridProcessPool.process_dict[hostname] = Perid()
 
     @staticmethod
     def detect():
         host_roi_dict = dict()
         hostname, host_viewport_buffer = TrackFrameDatabase.get_latest_host_update()
         print(hostname)
-        host_roi_dict[hostname] = PeridProcessPool.process_dict['RPI 1'].detect(host_viewport_buffer)
+        host_roi_dict[hostname] = PeridProcessPool.process_dict[hostname].detect(host_viewport_buffer)
 
         return host_roi_dict
 
 PeridProcessPool.start()
-print(PeridProcessPool.detect())
+import pickletools
+from paramiko import SSHClient
+from scp import SCPClient
+import io
+import time
+
+def send_response(hostname, address, roi):
+
+    client_path = os.path.join('/', 'home', 'pi', 'Multiview-port-object-tracking', 'src', 'response')
+
+    payload_pickle = pickletools.optimize(pickle.dumps(roi))
+
+    ssh = SSHClient()
+    ssh.load_system_host_keys()
+    ssh.connect(address, username='pi', password='raspberry')
+
+    scp = SCPClient(ssh.get_transport())
+
+    # generate in-memory file-like object
+    fl = io.BytesIO()
+    fl.write(payload_pickle)
+    fl.seek(0)
+    # upload it directly from memory
+    scp.putfo(fl, os.path.join(client_path, 'response_{0}.pickle'.format(time.time())))
+
+    # close connection
+    scp.close()
+    # close file handler
+    fl.close()
+
+while True:
+
+    host_roi_dict = PeridProcessPool.detect()
+
+    try:
+        print(host_roi_dict)
+    for hostname in host_roi_dict.keys():
+        send_response(hostname, PeridProcessPool.client_list[hostname], host_roi_dict[hostname])
+    except:
+        pass
 
     #p.join()
 
@@ -326,7 +393,7 @@ FileUpdateNotifier.terminate()
 
 
 exit()
-'''
+
 with open('test.pickle', 'rb') as s:
     import zlib
     import gzip
